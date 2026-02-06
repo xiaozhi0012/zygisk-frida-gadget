@@ -35,50 +35,31 @@ jobs:
       run: |
         # 验证 NDK 安装
         echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
-        ls -la "$ANDROID_NDK_ROOT" || echo "ERROR: NDK not found"
         
-        # 列出 cmake 目录中的文件
-        echo ""
-        echo "=== Listing CMake directory ==="
-        if [ -d "$ANDROID_NDK_ROOT/build/cmake" ]; then
-          ls -la "$ANDROID_NDK_ROOT/build/cmake"
-        else
-          echo "ERROR: $ANDROID_NDK_ROOT/build/cmake directory not found"
-        fi
-        
-        # 搜索所有 .cmake 文件
-        echo ""
-        echo "=== Searching for .cmake files ==="
-        find "$ANDROID_NDK_ROOT/build/cmake" -name "*.cmake" 2>/dev/null | head -10
-        
-        # 尝试找到正确的工具链文件
-        TOOLCHAIN_FILE=""
-        if [ -f "$ANDROID_NDK_ROOT/build/cmake/android.cmake" ]; then
-          TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.cmake"
-          echo "Found standard android.cmake"
-        else
-          # NDK 27.3 可能使用不同的文件名或结构
-          # 尝试查找 .cmake 文件
-          FOUND=$(find "$ANDROID_NDK_ROOT/build/cmake" -name "*.cmake" -type f 2>/dev/null | head -1)
-          if [ -n "$FOUND" ]; then
-            TOOLCHAIN_FILE="$FOUND"
-            echo "Found CMake file at: $TOOLCHAIN_FILE"
-          fi
-        fi
-        
-        if [ -z "$TOOLCHAIN_FILE" ]; then
-          echo "ERROR: Could not find any CMake toolchain file"
+        # 检查 NDK 是否正确安装
+        if [ ! -d "$ANDROID_NDK_ROOT" ]; then
+          echo "ERROR: ANDROID_NDK_ROOT directory not found: $ANDROID_NDK_ROOT"
           exit 1
         fi
         
-        echo "Using toolchain: $TOOLCHAIN_FILE"
+        # 列出编译器
+        TOOLCHAIN_LLVM="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64"
+        if [ -d "$TOOLCHAIN_LLVM" ]; then
+          echo "Found LLVM toolchain at: $TOOLCHAIN_LLVM"
+          ls "$TOOLCHAIN_LLVM/bin/clang" 2>/dev/null && echo "clang compiler found" || echo "clang compiler NOT found"
+        else
+          echo "ERROR: LLVM toolchain not found at $TOOLCHAIN_LLVM"
+          exit 1
+        fi
         
         mkdir -p build
         cd build
         
-        # 使用 NDK 工具链编译
+        # 使用自定义工具链编译
+        echo "Configuring CMake..."
         cmake .. \
-          -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE" \
+          -DCMAKE_TOOLCHAIN_FILE="$(pwd)/../android.toolchain.cmake" \
+          -DANDROID_NDK_ROOT="$ANDROID_NDK_ROOT" \
           -DANDROID_ABI=arm64-v8a \
           -DANDROID_PLATFORM=android-29 \
           -DANDROID_STL=c++_shared \
@@ -86,6 +67,7 @@ jobs:
           -DCMAKE_MAKE_PROGRAM=$(which ninja) \
           -G "Ninja"
         
+        echo "Building..."
         # 构建
         ninja -j$(nproc)
         cd ..
