@@ -1,0 +1,6 @@
+id=zygisk_frida_gadget
+name=Zygisk Frida Gadget
+version=1.0.0
+versionCode=1
+author=xiaozhi0012
+description=Zygisk module for Frida Gadget injection

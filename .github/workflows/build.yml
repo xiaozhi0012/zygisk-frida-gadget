@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -12,28 +15,87 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
-    - name: Install NDK
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential ninja-build
+
+    - name: Setup Android NDK
       uses: nttld/setup-ndk@v1
       with:
         ndk-version: r26b
+        add-to-path: true
 
     - name: Build Zygisk Module
       run: |
-        cd zygisk
-        mkdir build && cd build
-        cmake .. -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DCMAKE_BUILD_TYPE=Release
-        make -j4
-        cd ../../
+        mkdir -p build
+        cd build
+        cmake .. \
+          -DCMAKE_TOOLCHAIN_FILE=${{ env.ANDROID_NDK_ROOT }}/build/cmake/android.cmake \
+          -DANDROID_ABI=arm64-v8a \
+          -DANDROID_PLATFORM=android-29 \
+          -DANDROID_STL=c++_shared \
+          -DCMAKE_BUILD_TYPE=Release \
+          -GNinja
+        ninja -j$(nproc)
+        cd ..
+
+    - name: Verify Module Structure
+      run: |
+        echo "Checking module.prop..."
+        test -f module.prop || echo "WARNING: module.prop not found"
+        echo "Checking customize.sh..."
+        test -f customize.sh || echo "WARNING: customize.sh not found"
+        echo "Checking service.sh..."
+        test -f service.sh || echo "WARNING: service.sh not found"
+
+    - name: Copy Build Artifacts
+      run: |
+        # 复制编译生成的 so 文件到 lib 目录
+        if [ -f build/lib/arm64-v8a/zygisk.so ]; then
+          cp build/lib/arm64-v8a/zygisk.so lib/arm64-v8a/
+          echo "zygisk.so copied successfully"
+        else
+          echo "WARNING: zygisk.so not found"
+        fi
 
     - name: Pack Magisk Module
       run: |
-        mkdir output
-        zip -r output/zygisk-frida-gadget.zip . -x "*.git*"
+        mkdir -p output
+        # 确保包含所有必要文件
+        zip -r output/zygisk-frida-gadget.zip . \
+          -x "*.git*" ".github*" "build/*" "output/*" "README.md" \
+          --include="module.prop" \
+          --include="customize.sh" \
+          --include="service.sh" \
+          --include="lib/*" \
+          --include="zygisk/*" \
+          --include="include/*"
+
+    - name: Generate Release Notes
+      run: |
+        echo "# Zygisk Frida Gadget Build" > release_notes.md
+        echo "" >> release_notes.md
+        echo "Build Date: $(date)" >> release_notes.md
+        echo "Commit: ${{ github.sha }}" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "## Build Artifacts" >> release_notes.md
+        echo "- \`zygisk-frida-gadget.zip\`: Magisk module package" >> release_notes.md
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: zygisk-frida-gadget
         path: output/zygisk-frida-gadget.zip
+        retention-days: 30
+
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: output/zygisk-frida-gadget.zip
+        body_path: release_notes.md
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
