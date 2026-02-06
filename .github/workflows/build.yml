@@ -37,11 +37,25 @@ jobs:
         echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
         ls -la "$ANDROID_NDK_ROOT" || echo "ERROR: NDK not found"
         
-        # 查找工具链文件
-        TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.cmake"
-        if [ ! -f "$TOOLCHAIN_FILE" ]; then
-          echo "ERROR: Toolchain file not found at $TOOLCHAIN_FILE"
-          find "$ANDROID_NDK_ROOT" -name "android.cmake" 2>/dev/null || echo "No android.cmake found"
+        # 尝试找到正确的工具链文件
+        TOOLCHAIN_FILE=""
+        if [ -f "$ANDROID_NDK_ROOT/build/cmake/android.cmake" ]; then
+          TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.cmake"
+        elif [ -f "$ANDROID_NDK_HOME/build/cmake/android.cmake" ]; then
+          TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.cmake"
+        else
+          # 尝试找到任何 android.cmake
+          FOUND=$(find "$ANDROID_NDK_ROOT" -name "android.cmake" 2>/dev/null | head -1)
+          if [ -n "$FOUND" ]; then
+            TOOLCHAIN_FILE="$FOUND"
+            echo "Found toolchain at: $TOOLCHAIN_FILE"
+          fi
+        fi
+        
+        if [ -z "$TOOLCHAIN_FILE" ]; then
+          echo "ERROR: Could not find android.cmake toolchain file"
+          echo "Searching for cmake directory..."
+          find "$ANDROID_NDK_ROOT" -type d -name cmake 2>/dev/null | head -5
           exit 1
         fi
         
