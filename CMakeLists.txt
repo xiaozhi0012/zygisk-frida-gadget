@@ -1,4 +1,12 @@
 cmake_minimum_required(VERSION 3.21)
+
+# Android 平台设置（必须在 project() 之前）
+if(ANDROID_ABI)
+    set(CMAKE_SYSTEM_NAME Android)
+    set(CMAKE_SYSTEM_VERSION ${ANDROID_API_LEVEL})
+    message(STATUS "Configuring for Android API ${ANDROID_API_LEVEL}, ABI ${ANDROID_ABI}")
+endif()
+
 project(zygisk-frida-gadget LANGUAGES CXX C)
 
 # 编译标准
