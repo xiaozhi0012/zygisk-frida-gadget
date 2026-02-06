@@ -1,0 +1,39 @@
+name: Build Zygisk Frida Gadget
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Install NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r26b
+
+    - name: Build Zygisk Module
+      run: |
+        cd zygisk
+        mkdir build && cd build
+        cmake .. -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DCMAKE_BUILD_TYPE=Release
+        make -j4
+        cd ../../
+
+    - name: Pack Magisk Module
+      run: |
+        mkdir output
+        zip -r output/zygisk-frida-gadget.zip . -x "*.git*"
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: zygisk-frida-gadget
+        path: output/zygisk-frida-gadget.zip
