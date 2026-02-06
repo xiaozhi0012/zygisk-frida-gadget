@@ -37,25 +37,37 @@ jobs:
         echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
         ls -la "$ANDROID_NDK_ROOT" || echo "ERROR: NDK not found"
         
+        # 列出 cmake 目录中的文件
+        echo ""
+        echo "=== Listing CMake directory ==="
+        if [ -d "$ANDROID_NDK_ROOT/build/cmake" ]; then
+          ls -la "$ANDROID_NDK_ROOT/build/cmake"
+        else
+          echo "ERROR: $ANDROID_NDK_ROOT/build/cmake directory not found"
+        fi
+        
+        # 搜索所有 .cmake 文件
+        echo ""
+        echo "=== Searching for .cmake files ==="
+        find "$ANDROID_NDK_ROOT/build/cmake" -name "*.cmake" 2>/dev/null | head -10
+        
         # 尝试找到正确的工具链文件
         TOOLCHAIN_FILE=""
         if [ -f "$ANDROID_NDK_ROOT/build/cmake/android.cmake" ]; then
           TOOLCHAIN_FILE="$ANDROID_NDK_ROOT/build/cmake/android.cmake"
-        elif [ -f "$ANDROID_NDK_HOME/build/cmake/android.cmake" ]; then
-          TOOLCHAIN_FILE="$ANDROID_NDK_HOME/build/cmake/android.cmake"
+          echo "Found standard android.cmake"
         else
-          # 尝试找到任何 android.cmake
-          FOUND=$(find "$ANDROID_NDK_ROOT" -name "android.cmake" 2>/dev/null | head -1)
+          # NDK 27.3 可能使用不同的文件名或结构
+          # 尝试查找 .cmake 文件
+          FOUND=$(find "$ANDROID_NDK_ROOT/build/cmake" -name "*.cmake" -type f 2>/dev/null | head -1)
           if [ -n "$FOUND" ]; then
             TOOLCHAIN_FILE="$FOUND"
-            echo "Found toolchain at: $TOOLCHAIN_FILE"
+            echo "Found CMake file at: $TOOLCHAIN_FILE"
           fi
         fi
         
         if [ -z "$TOOLCHAIN_FILE" ]; then
-          echo "ERROR: Could not find android.cmake toolchain file"
-          echo "Searching for cmake directory..."
-          find "$ANDROID_NDK_ROOT" -type d -name cmake 2>/dev/null | head -5
+          echo "ERROR: Could not find any CMake toolchain file"
           exit 1
         fi
         
